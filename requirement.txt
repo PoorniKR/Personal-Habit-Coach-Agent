@@ -1,0 +1,7 @@
+streamlit
+matplotlib
+python-dotenv
+langchain
+langchain-google-genai
+langchain-chroma
+chromadb
