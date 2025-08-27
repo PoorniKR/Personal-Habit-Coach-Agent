@@ -23,11 +23,15 @@ embeddings = GoogleGenerativeAIEmbeddings(
     model="models/embedding-001",
     google_api_key=GOOGLE_API_KEY
 )
-vectordb = Chroma(
-    collection_name="habit_logs",
-    embedding_function=embeddings,
-    persist_directory="./chroma_db"  # <- persistent storage
-)
+try:
+    vectordb = Chroma(
+        collection_name="habit_logs",
+        embedding_function=embeddings,
+        persist_directory="./chroma_db"
+    )
+except Exception as e:
+    st.warning(f"⚠️ ChromaDB could not start: {e}")
+    vectordb = None
 
 # Habit definitions
 HABITS = {
@@ -207,3 +211,4 @@ elif action == "AI Feedback":
 
 elif action == "View Stored Data":
     view_chroma_data()
+
