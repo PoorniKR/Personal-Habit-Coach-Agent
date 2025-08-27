@@ -13,25 +13,18 @@ GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
 # LangChain + Gemini
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_chroma import Chroma
+
+# ⚠️ Removed problematic chroma import (works locally but fails on Streamlit Cloud)
+# from langchain_chroma import Chroma
 
 # LLM
 llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
 
-# Embeddings + Chroma (auto-persist)
+# Embeddings (not used in this simplified version, safe to extend later)
 embeddings = GoogleGenerativeAIEmbeddings(
     model="models/embedding-001",
     google_api_key=GOOGLE_API_KEY
 )
-try:
-    vectordb = Chroma(
-        collection_name="habit_logs",
-        embedding_function=embeddings,
-        persist_directory="./chroma_db"
-    )
-except Exception as e:
-    st.warning(f"⚠️ ChromaDB could not start: {e}")
-    vectordb = None
 
 # Habit definitions
 HABITS = {
@@ -50,30 +43,38 @@ def ensure_csv():
             writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
             writer.writeheader()
 
-def log_habits(habit_values: Dict[str, float]):
-    ensure_csv()
-    today = dt.date.today().isoformat()
-    row = {"date": today}
-    row.update(habit_values)
-
-    # Save to CSV
-    with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writerow(row)
-
-    # Save to Chroma
-    vectordb.add_texts(
-        texts=[f"On {today}, habits logged: {habit_values}"],
-        ids=[today]
-    )
-
 def load_rows() -> List[Dict[str, str]]:
     ensure_csv()
     with open(LOG_FILE, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
+
+    # ✅ keep only the latest row for each date
+    deduped = {}
+    for r in rows:
+        deduped[r["date"]] = r  # overwrite keeps the latest one
+    rows = list(deduped.values())
+
     rows.sort(key=lambda r: r["date"])
     return rows
+
+def log_habits(habit_values: Dict[str, float]):
+    today = dt.date.today().isoformat()
+    row = {"date": today}
+    row.update(habit_values)
+
+    # Load all rows and remove today's old entry
+    rows = load_rows()
+    rows = [r for r in rows if r["date"] != today]
+
+    # Add today's new row
+    rows.append(row)
+
+    # Rewrite CSV
+    with open(LOG_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(rows)
 
 # ---------------- Feedback ----------------
 def simple_feedback():
@@ -164,24 +165,13 @@ def ai_feedback():
     st.subheader("🤖 AI Coach Feedback")
     st.write(result.content)
 
-# ---------------- View Stored Data ----------------
-def view_chroma_data():
-    results = vectordb.get()
-    if not results["documents"]:
-        st.info("No data stored yet in ChromaDB.")
-        return
-    
-    st.subheader("📂 Data Stored in ChromaDB")
-    for i, text in enumerate(results["documents"]):
-        st.write(f"**{i+1}.** {text}  _(ID: {results['ids'][i]})_")
-
 # ---------------- Streamlit App ----------------
-st.title("📝 Personal Habit Coach ")
+st.title("📝 Personal Habit Coach")
 
 st.sidebar.header("Actions")
 action = st.sidebar.radio(
     "Choose an action",
-    ["Log Habits", "Simple Feedback", "Plot Progress", "AI Feedback", "View Stored Data"]
+    ["Log Habits", "Simple Feedback", "Plot Progress", "AI Feedback"]
 )
 
 if action == "Log Habits":
@@ -190,9 +180,9 @@ if action == "Log Habits":
     with st.form(key="habit_form"): 
         for key, meta in HABITS.items():
             if key == "steps":
-                habit_values[key] = st.number_input(meta["label"], min_value=0, step=1000)  # increments of 1000
+                habit_values[key] = st.number_input(meta["label"], min_value=0, step=1000)
             elif key in ["sleep", "water"]:
-                habit_values[key] = st.number_input(meta["label"], min_value=0, step=1)  # increments of 1
+                habit_values[key] = st.number_input(meta["label"], min_value=0, step=1)
             else:
                 habit_values[key] = st.number_input(meta["label"], min_value=0.0, step=0.1)
         submit = st.form_submit_button("Save")
@@ -208,7 +198,3 @@ elif action == "Plot Progress":
 
 elif action == "AI Feedback":
     ai_feedback()
-
-elif action == "View Stored Data":
-    view_chroma_data()
-
