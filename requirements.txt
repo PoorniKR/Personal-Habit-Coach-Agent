@@ -3,5 +3,6 @@ matplotlib
 python-dotenv
 langchain
 langchain-google-genai
+numpy<2.0
 chromadb==0.4.22
 langchain-chroma
