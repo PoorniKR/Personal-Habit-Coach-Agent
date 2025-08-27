@@ -10,21 +10,11 @@ from dotenv import load_dotenv
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# LangChain + Gemini
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 
-# ⚠️ Removed problematic chroma import (works locally but fails on Streamlit Cloud)
-# from langchain_chroma import Chroma
-
 # LLM
 llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
-
-# Embeddings (not used in this simplified version, safe to extend later)
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001",
-    google_api_key=GOOGLE_API_KEY
-)
 
 # Habit definitions
 HABITS = {
@@ -49,10 +39,9 @@ def load_rows() -> List[Dict[str, str]]:
         reader = csv.DictReader(f)
         rows = list(reader)
 
-    # ✅ keep only the latest row for each date
     deduped = {}
     for r in rows:
-        deduped[r["date"]] = r  # overwrite keeps the latest one
+        deduped[r["date"]] = r  
     rows = list(deduped.values())
 
     rows.sort(key=lambda r: r["date"])
@@ -63,14 +52,11 @@ def log_habits(habit_values: Dict[str, float]):
     row = {"date": today}
     row.update(habit_values)
 
-    # Load all rows and remove today's old entry
     rows = load_rows()
     rows = [r for r in rows if r["date"] != today]
 
-    # Add today's new row
     rows.append(row)
 
-    # Rewrite CSV
     with open(LOG_FILE, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
         writer.writeheader()
@@ -198,3 +184,4 @@ elif action == "Plot Progress":
 
 elif action == "AI Feedback":
     ai_feedback()
+
